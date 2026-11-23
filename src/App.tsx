@@ -1280,17 +1280,26 @@ export default function App() {
                         const caption = lang === 'KOR' ? slide.captionKo : slide.caption;
                         const isVideo = /\.(mp4|webm|mov)(\?.*)?$/i.test(slide.src);
                         if (isVideo) {
+                          const shouldAutoPlay = slide.autoplay !== false;
                           return (
                             <div
                               key={slide.src}
                               className="zoom-feed-item"
                             >
+                              {!shouldAutoPlay && (
+                                <div className="zoom-video-top">
+                                  <span className="zoom-carousel-label">
+                                    {caption}
+                                  </span>
+                                </div>
+                              )}
                               <video
                                 src={slide.src}
                                 className="zoom-slide-img"
-                                autoPlay
-                                loop
-                                muted
+                                autoPlay={shouldAutoPlay}
+                                loop={shouldAutoPlay}
+                                muted={shouldAutoPlay}
+                                preload="metadata"
                                 playsInline
                                 controls
                                 aria-label={`${getPrintTitle(activePrint)} ${idx + 1} — ${caption}`}

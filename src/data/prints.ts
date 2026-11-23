@@ -36,6 +36,7 @@ export interface GalleryImageItem {
   src: string;
   caption: string;
   captionKo: string;
+  autoplay?: boolean;
 }
 
 export interface PrintItem {
@@ -571,13 +572,33 @@ const RAW_PRINTS: Array<{
     descStart: '',
     descStartKo: '',
     fullDescription:
-      'A collection of motion graphics projects exploring rhythm, typography, and dynamic visual storytelling. Scan the QR code to watch each video.',
+      'A collection of motion graphics projects exploring rhythm, typography, and dynamic visual storytelling.',
     fullDescriptionKo:
-      '리듬감 있는 타이포그래피와 역동적인 시각 연출을 탐구한 모션 그래픽 작업 모음입니다. QR코드를 찍으면 해당 영상으로 이동합니다.',
+      '리듬감 있는 타이포그래피와 역동적인 시각 연출을 탐구한 모션 그래픽 작업 모음입니다.',
     customImage: '/assets/aistudio/스크린샷 2026-11-24 052932.png',
     customImageFit: 'contain',
     customImageBg: '#efefef',
     frameOrientation: 'landscape',
+    galleryImages: [
+      {
+        src: '/assets/aistudio/드라큘라 (Dracula) 편집본.mp4',
+        caption: 'Dracula — Motion Graphics',
+        captionKo: '드라큘라 (Dracula) 편집본',
+        autoplay: false,
+      },
+      {
+        src: '/assets/aistudio/파티클과제.mp4',
+        caption: 'Particle Motion',
+        captionKo: '파티클 과제',
+        autoplay: false,
+      },
+      {
+        src: '/assets/aistudio/팝업카드 만들기.mp4',
+        caption: 'Pop-up Card Motion',
+        captionKo: '팝업카드 만들기',
+        autoplay: false,
+      },
+    ],
     projectMeta: [
       {
         label: 'Duration',
