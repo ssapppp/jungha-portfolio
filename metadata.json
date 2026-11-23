@@ -1,0 +1,8 @@
+{
+  "name": "Remix 웹 포트폴리오 ",
+  "description": "웹 포트폴리오",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
