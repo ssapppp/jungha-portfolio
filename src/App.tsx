@@ -14,6 +14,7 @@ import {
 
 type ActiveView = 'gallery' | 'page' | 'list';
 type InfoModalTab = 'account' | 'saved' | 'contact' | null;
+type DoorState = 'closed' | 'opening' | 'entered';
 
 interface FlyerState {
   id: number;
@@ -23,6 +24,13 @@ interface FlyerState {
 
 const COPY = {
   KOR: {
+    entranceAriaLabel: '전시장 입구',
+    entranceKicker: '2026 SOLO EXHIBITION',
+    entranceMeta: 'PARK JUNG HA · 09 WORKS · JEJU',
+    entranceEyebrow: '박정하 포트폴리오 전시장',
+    entranceTitle: '2026 Portfolio',
+    entranceSubtitle: '그래픽 · 캐릭터 · 포스터 · 3D · 모션 아카이브',
+    entranceCta: '문 열고 입장하기',
     navIndex: '목차',
     searchLabel: '검색…',
     searchPlaceholder: '작품명 또는 작가명을 검색하세요…',
@@ -100,6 +108,13 @@ const COPY = {
     savedEmpty: '저장한 작품이 아직 없습니다.',
   },
   ENG: {
+    entranceAriaLabel: 'Gallery Entrance',
+    entranceKicker: '2026 SOLO EXHIBITION',
+    entranceMeta: 'PARK JUNG HA · 09 WORKS · JEJU',
+    entranceEyebrow: 'PARK JUNG HA EXHIBITION HALL',
+    entranceTitle: '2026 Portfolio',
+    entranceSubtitle: 'GRAPHIC · CHARACTER · POSTER · 3D · MOTION ARCHIVE',
+    entranceCta: 'ENTER GALLERY',
     navIndex: 'Index',
     searchLabel: 'Search…',
     searchPlaceholder: 'Search prints or artists…',
@@ -187,6 +202,7 @@ export default function App() {
   const headlineRowRef = useRef<HTMLDivElement | null>(null);
   const headlineRef = useRef<HTMLHeadingElement | null>(null);
   const detailsTimerRef = useRef<number | null>(null);
+  const doorTimerRef = useRef<number | null>(null);
   const flyerAnimRef = useRef<Animation | null>(null);
 
   const [reducedMotion, setReducedMotion] = useState<boolean>(() =>
@@ -198,9 +214,12 @@ export default function App() {
   const [lang, setLang] = useState<Lang>('KOR');
   const t = COPY[lang];
 
-  const [introReady, setIntroReady] = useState(false);
+  const [sceneReady, setSceneReady] = useState(false);
+  const [doorState, setDoorState] = useState<DoorState>('closed');
+  const introReady = sceneReady && doorState !== 'closed';
   const [view, setView] = useState<ActiveView>('gallery');
   const [focusedSlot, setFocusedSlot] = useState<PrintSlotMeta | null>(null);
+  const [atStart, setAtStart] = useState(true);
   const [hoveringPrint, setHoveringPrint] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [pill, setPill] = useState<PillState>({ visible: false, x: 0, y: 0 });
@@ -270,6 +289,30 @@ export default function App() {
       window.removeEventListener('resize', updateHeadlineEnd);
     };
   }, [introReady, lang]);
+
+  useEffect(() => {
+    return () => {
+      if (doorTimerRef.current !== null) {
+        window.clearTimeout(doorTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleEnterMuseum = useCallback(() => {
+    if (doorState !== 'closed') return;
+    setDoorState('opening');
+    galleryRef.current?.triggerIntro();
+    if (doorTimerRef.current !== null) {
+      window.clearTimeout(doorTimerRef.current);
+    }
+    doorTimerRef.current = window.setTimeout(
+      () => {
+        setDoorState('entered');
+        doorTimerRef.current = null;
+      },
+      reducedMotion ? 50 : 1120,
+    );
+  }, [doorState, reducedMotion]);
 
   const clearPendingAnimations = useCallback(() => {
     if (detailsTimerRef.current !== null) {
@@ -453,6 +496,10 @@ export default function App() {
   // Keyboard shortcuts
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (doorState === 'closed') {
+        return;
+      }
+
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setSearchOpen((prev) => !prev);
@@ -518,6 +565,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
     activePrintIndex,
+    doorState,
     focusedSlot,
     infoModal,
     returnToGallery,
@@ -596,6 +644,87 @@ export default function App() {
 
   return (
     <div className={introReady ? 'intro-ready' : ''}>
+      {/* 0. Museum Entrance Doors */}
+      {doorState !== 'entered' && (
+        <div
+          className={`museum-entrance ${doorState === 'opening' ? 'opening' : ''}`}
+          role="region"
+          aria-label={t.entranceAriaLabel}
+        >
+          <div className="museum-facade-top">
+            <div className="museum-facade-bar">
+              <span className="museum-facade-mark">PARK JUNG HA · ARCHIVE</span>
+              <div className="museum-facade-lang" role="group" aria-label="Language">
+                {(['KOR', 'ENG'] as const).map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    className={`nav-lang-btn ${lang === code ? 'active' : ''}`}
+                    aria-pressed={lang === code}
+                    onClick={() => setLang(code)}
+                  >
+                    {code}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="museum-lintel" aria-hidden="true">
+              <span className="museum-lintel-kicker">{t.entranceKicker}</span>
+              <span className="museum-lintel-meta">{t.entranceMeta}</span>
+            </div>
+          </div>
+
+          <div className="museum-wall museum-wall-left" aria-hidden="true">
+            <span className="museum-pilaster" />
+          </div>
+
+          <div className="museum-portal">
+            <button
+              type="button"
+              className="museum-doors-trigger"
+              onClick={handleEnterMuseum}
+              aria-label={`${t.entranceTitle} — ${t.entranceCta}`}
+            >
+              <span className="museum-interior-glow" aria-hidden="true" />
+
+              <span className="museum-door museum-door-left" aria-hidden="true">
+                <span className="museum-door-frame">
+                  <span className="museum-door-panel top" />
+                  <span className="museum-door-panel bottom" />
+                </span>
+                <span className="museum-door-handle" />
+              </span>
+
+              <span className="museum-door-seam" aria-hidden="true" />
+
+              <span className="museum-door museum-door-right" aria-hidden="true">
+                <span className="museum-door-frame">
+                  <span className="museum-door-panel top" />
+                  <span className="museum-door-panel bottom" />
+                </span>
+                <span className="museum-door-handle" />
+              </span>
+
+              <span className="museum-plaque">
+                <span className="museum-plaque-eyebrow">{t.entranceEyebrow}</span>
+                <span className="museum-plaque-title">{t.entranceTitle}</span>
+                <span className="museum-plaque-sub">{t.entranceSubtitle}</span>
+                <span className="museum-plaque-cta">
+                  <span>{t.entranceCta}</span>
+                  <span className="museum-plaque-arrow" aria-hidden="true">→</span>
+                </span>
+              </span>
+            </button>
+          </div>
+
+          <div className="museum-wall museum-wall-right" aria-hidden="true">
+            <span className="museum-pilaster" />
+          </div>
+
+          <div className="museum-threshold" aria-hidden="true" />
+        </div>
+      )}
+
       {/* 1. Nav */}
       <header className={`nav ${isOverlayOpen ? 'solid' : ''}`}>
         <button
@@ -751,14 +880,15 @@ export default function App() {
         <Gallery3D
           ref={galleryRef}
           lang={lang}
-          suspended={isOverlayOpen}
+          suspended={doorState === 'closed' || isOverlayOpen}
           reducedMotion={reducedMotion}
-          onIntroReady={() => setIntroReady(true)}
+          onIntroReady={() => setSceneReady(true)}
           onFocusChange={setFocusedSlot}
           onOpenPrint={handleOpenFromGallery}
           onPillChange={setPill}
           onHoverChange={setHoveringPrint}
           onDragChange={setDragging}
+          onStartBoundChange={setAtStart}
         />
         <div id="veil" className={introReady ? 'cleared' : ''} />
       </main>
@@ -769,6 +899,7 @@ export default function App() {
           <button
             type="button"
             className="arrow-btn"
+            disabled={!focusedSlot && atStart}
             aria-label={lang === 'KOR' ? '이전 작품' : 'Previous print'}
             onClick={() => galleryRef.current?.stepArrow(-1)}
           >

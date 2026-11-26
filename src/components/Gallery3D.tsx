@@ -37,6 +37,7 @@ export interface GalleryHandle {
   stepBack: () => void;
   focusNearestOuterPrint: (printIndex: number) => void;
   getProjectedRect: (mesh: THREE.Mesh) => ScreenRect;
+  triggerIntro: () => void;
 }
 
 interface Gallery3DProps {
@@ -49,6 +50,7 @@ interface Gallery3DProps {
   onPillChange: (pill: PillState) => void;
   onHoverChange: (hovering: boolean) => void;
   onDragChange: (dragging: boolean) => void;
+  onStartBoundChange?: (atStart: boolean) => void;
 }
 
 const R = 18;
@@ -62,6 +64,7 @@ const PY = 1.95;
 const OUTER_COUNT = 36;
 const INNER_COUNT = 24;
 const STEP = (Math.PI * 2) / OUTER_COUNT;
+const TH_START_WALL = 0.68;
 
 interface CameraPose {
   th: number;
@@ -265,6 +268,7 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
       onPillChange,
       onHoverChange,
       onDragChange,
+      onStartBoundChange,
     },
     ref,
   ) => {
@@ -280,6 +284,7 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
       onPillChange,
       onHoverChange,
       onDragChange,
+      onStartBoundChange,
     });
     callbacksRef.current = {
       lang,
@@ -291,6 +296,7 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
       onPillChange,
       onHoverChange,
       onDragChange,
+      onStartBoundChange,
     };
 
     const apiRef = useRef<GalleryHandle | null>(null);
@@ -308,6 +314,7 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
           width: 200,
           height: 270,
         },
+      triggerIntro: () => apiRef.current?.triggerIntro(),
     }));
 
     useEffect(() => {
@@ -334,6 +341,8 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
         isSmallScreen() && window.innerHeight > window.innerWidth;
       const getWalkOffset = () =>
         isPortraitSmall() ? 0.14 + 0.9 * STEP : 0.14;
+      const getWalkMax = () => getWalkOffset() + 0.08;
+      const clampWalkTh = (th: number) => Math.min(getWalkMax(), th);
 
       const getWalkPose = (th: number): CameraPose => {
         if (isPortraitSmall()) {
@@ -357,7 +366,8 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
             : RIN + 4.26;
         const y = portraitSmall ? PY - 1.05 : PY - 0.52;
         const yaw = isOuter ? Math.PI / 2 : -Math.PI / 2;
-        const th = wrapAngleNear(slot.angle, currentTh);
+        let th = wrapAngleNear(slot.angle, currentTh);
+        if (th > 0.05) th -= Math.PI * 2;
         return { th, r, yaw, y, pitch: 0 };
       };
 
@@ -467,6 +477,60 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
       scene.add(ceiling);
       geometries.push(ceilingGeo);
       materials.push(ceilingMat);
+
+      // Entrance partition wall (Beginning of the corridor only)
+      const startWallGeo = new THREE.PlaneGeometry(R - RIN + 0.16, H);
+      const startWallMat = new THREE.MeshBasicMaterial({
+        map: outerWallTex,
+        side: THREE.DoubleSide,
+      });
+      const startTrimGeo = new THREE.PlaneGeometry(R - RIN + 0.16, 0.18);
+      const startTrimMat = new THREE.MeshBasicMaterial({
+        color: '#E2D1B3',
+        side: THREE.DoubleSide,
+      });
+      const doorReliefGeo = new THREE.PlaneGeometry(2.4, 3.8);
+      const doorReliefMat = new THREE.MeshBasicMaterial({
+        color: '#3A3550',
+        side: THREE.DoubleSide,
+      });
+      const doorSeamGeo = new THREE.PlaneGeometry(0.03, 3.8);
+      const doorSeamMat = new THREE.MeshBasicMaterial({
+        color: '#E9D392',
+        side: THREE.DoubleSide,
+      });
+      geometries.push(startWallGeo, startTrimGeo, doorReliefGeo, doorSeamGeo);
+      materials.push(startWallMat, startTrimMat, doorReliefMat, doorSeamMat);
+
+      const startWallGroup = new THREE.Group();
+      {
+        const midR = (R + RIN) / 2;
+        const wx = midR * Math.cos(TH_START_WALL);
+        const wz = midR * Math.sin(TH_START_WALL);
+        const tx = Math.sin(TH_START_WALL);
+        const tz = -Math.cos(TH_START_WALL);
+
+        startWallGroup.position.set(wx, 0, wz);
+        startWallGroup.lookAt(wx + tx, 0, wz + tz);
+
+        const wallMesh = new THREE.Mesh(startWallGeo, startWallMat);
+        wallMesh.position.set(0, H / 2, 0);
+        startWallGroup.add(wallMesh);
+
+        const baseTrim = new THREE.Mesh(startTrimGeo, startTrimMat);
+        baseTrim.position.set(0, 0.09, 0.01);
+        startWallGroup.add(baseTrim);
+
+        const doorRelief = new THREE.Mesh(doorReliefGeo, doorReliefMat);
+        doorRelief.position.set(0, 1.9, 0.015);
+        startWallGroup.add(doorRelief);
+
+        const doorSeam = new THREE.Mesh(doorSeamGeo, doorSeamMat);
+        doorSeam.position.set(0, 1.9, 0.02);
+        startWallGroup.add(doorSeam);
+
+        scene.add(startWallGroup);
+      }
 
       // Shared print geometries & materials
       const haloGeo = new THREE.PlaneGeometry(2.1 * PW, 1.75 * PH);
@@ -626,13 +690,16 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
       };
 
       for (let s = 0; s < OUTER_COUNT; s++) {
-        const angle = (s * Math.PI * 2) / OUTER_COUNT;
-        addPrintGroup('outer', s, angle, s % 9);
+        addPrintGroup('outer', s, -s * STEP, s % PRINTS.length);
       }
 
       for (let k = 0; k < INNER_COUNT; k++) {
-        const angle = ((k + 0.5) * Math.PI * 2) / INNER_COUNT;
-        addPrintGroup('inner', k, angle, (k + 4) % 9);
+        addPrintGroup(
+          'inner',
+          k,
+          -((k + 0.5) * Math.PI * 2) / INNER_COUNT,
+          (k + 4) % PRINTS.length,
+        );
       }
 
       // Camera & Animation state
@@ -749,7 +816,7 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
         callbacksRef.current.onFocusChange(null);
         callbacksRef.current.onPillChange({ visible: false, x: 0, y: 0 });
 
-        const walkAngle = pose.th + D;
+        const walkAngle = clampWalkTh(pose.th + D);
         targetTh = walkAngle;
         const endPose = getWalkPose(walkAngle);
 
@@ -773,7 +840,7 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
             return;
           }
           const D = getWalkOffset();
-          targetTh = (Math.round((targetTh - D) / STEP) - dir) * STEP + D;
+          targetTh = clampWalkTh((Math.round((targetTh - D) / STEP) - dir) * STEP + D);
         },
         stepBack,
         focusNearestOuterPrint: (printIndex) => {
@@ -781,8 +848,9 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
           let bestDist = Infinity;
           for (const slot of slots) {
             if (slot.wall !== 'outer' || slot.printIndex !== printIndex) continue;
-            const wrapped = wrapAngleNear(slot.angle, pose.th);
-            const dist = Math.abs(wrapped - pose.th);
+            let cand = wrapAngleNear(slot.angle, pose.th);
+            if (cand > 0.05) cand -= Math.PI * 2;
+            const dist = Math.abs(cand - pose.th);
             if (dist < bestDist) {
               bestDist = dist;
               best = slot;
@@ -793,22 +861,43 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
           }
         },
         getProjectedRect,
+        triggerIntro: () => {
+          introRequested = true;
+          tryStartIntro();
+        },
       };
 
       // Texture & Font loading + Intro trigger
       let artLoaded = false;
       let fontsLoaded = false;
+      let readyNotified = false;
+      let introRequested = false;
       let introStarted = false;
       let disposed = false;
 
       const tryStartIntro = () => {
-        if (introStarted || disposed) return;
+        if (disposed) return;
         if (!artLoaded || !fontsLoaded) return;
-        introStarted = true;
-        callbacksRef.current.onIntroReady();
 
         const D = getWalkOffset();
         const walkEnd = getWalkPose(D);
+
+        if (!readyNotified) {
+          readyNotified = true;
+          callbacksRef.current.onIntroReady();
+          targetTh = D;
+          if (!introRequested) {
+            Object.assign(pose, {
+              ...walkEnd,
+              th: D + 0.16,
+              r: walkEnd.r - 0.55,
+            });
+          }
+        }
+
+        if (!introRequested || introStarted) return;
+        introStarted = true;
+
         targetTh = D;
         if (callbacksRef.current.reducedMotion) {
           Object.assign(pose, walkEnd);
@@ -816,11 +905,11 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
         } else {
           tweenMode = 'intro';
           tweenElapsed = 0;
-          tweenDuration = 1.4;
+          tweenDuration = 1.45;
           tweenStart = {
             ...walkEnd,
             th: D + 0.16,
-            r: walkEnd.r - 0.35,
+            r: walkEnd.r - 0.55,
           };
           tweenEnd = walkEnd;
           Object.assign(pose, tweenStart);
@@ -1032,7 +1121,7 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
           if (isDragging) {
             const delta = Math.abs(dx) > Math.abs(dy) ? dx : dy;
             const rate = isSmallScreen() ? 0.0042 : 0.0022;
-            targetTh = downAngle + delta * rate;
+            targetTh = clampWalkTh(downAngle + delta * rate);
             return;
           }
         }
@@ -1088,7 +1177,7 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
           stepBack();
         }
         const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
-        targetTh += -dy * 0.0016;
+        targetTh = clampWalkTh(targetTh - dy * 0.0016);
       };
 
       const onResize = () => {
@@ -1147,6 +1236,8 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
         frameId = window.setTimeout(poll, 5);
       };
 
+      let lastAtStart = true;
+
       const tick = (now: number) => {
         if (disposed) return;
         const dt = Math.min((now - lastTime) / 1000, 0.1);
@@ -1196,8 +1287,16 @@ export const Gallery3D = React.forwardRef<GalleryHandle, Gallery3DProps>(
             pose.pitch = walkP.pitch;
           }
 
+          startWallGroup.visible = pose.th > TH_START_WALL - Math.PI * 1.15;
+
           applyCameraPose(pose);
           renderer.render(scene, camera);
+
+          const atStart = targetTh >= getWalkMax() - 0.025;
+          if (atStart !== lastAtStart) {
+            lastAtStart = atStart;
+            callbacksRef.current.onStartBoundChange?.(atStart);
+          }
 
           if (focusedSlot && isSmallScreen()) {
             const rect = getProjectedRect(focusedSlot.mesh);
